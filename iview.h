@@ -52,6 +52,7 @@ enum {
   ATOM_CA_CB,
   ATOM_CA_CB_N,
   ATOM_CA_CB_N_O,
+  ANIMATE,
   MENU_EXIT
 };
 
@@ -271,7 +272,9 @@ void data_reader(string pdb_file,
 
 namespace UTIL_
 {
-  void proc_spec_str(string);
+  void proc_spec_str(string,vector<unsigned int>& ATTRIB_CHAIN_INDEX,
+			  vector<unsigned int>& ATTRIB_CHAIN_ATTRIB,
+			  map<unsigned int,map<unsigned int,unsigned int> >& ATTRIB_CHAIN_POS);
 };
 
 

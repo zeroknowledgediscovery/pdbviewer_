@@ -906,10 +906,13 @@ void drawStick(coord_ p1,coord_ p2)
   double vz=p2.z-p1.z;
   double c_height=sqrt(vx*vx+vy*vy+vz*vz);
 
-  if ((c_height>MAX_SEPARATION) 
-      && (C_VIOLATION.insert(c_height).second))
-    cout << "MAX C VIOLATION WARNING " << c_height << endl;
-  return;
+
+  if (c_height>MAX_SEPARATION) 
+    {
+      if (C_VIOLATION.insert(c_height).second)
+	cout << "MAX C VIOLATION WARNING " << c_height << endl;
+      return;
+    }
 
   double  rx=-vy*vz,  ry=vx*vz, ax=0.0;
   if (vz==0)
@@ -949,9 +952,10 @@ void drawStick(coord_ p1,coord_ p2, color_ color)
   double vz=p2.z-p1.z;
   double c_height=sqrt(vx*vx+vy*vy+vz*vz);
 
-  if (c_height>MAX_SEPARATION)
+  if (c_height>MAX_SEPARATION) 
     {
-      cout << c_height << endl;
+      if (C_VIOLATION.insert(c_height).second)
+	cout << "MAX C VIOLATION WARNING " << c_height << endl;
       return;
     }
 
@@ -1471,7 +1475,11 @@ void molviewConfig(string specstr)
   APP_NAME += APP_NAME_EXT;
 
 
-  UTIL_::proc_spec_str(specstr);
+  UTIL_::proc_spec_str(specstr,
+		       ATTRIB_CHAIN_INDEX,
+		       ATTRIB_CHAIN_ATTRIB,
+		       ATTRIB_CHAIN_POS);
+    
 
 
   if (gl2ps_type=="")
@@ -1560,6 +1568,14 @@ void molviewConfig(string specstr)
     VISIBLE_[VISIBLE_INDEX[i]] = VISIBLE_FLAG[i];
 
 
+  if(DEBUG_)
+    {
+      for(map<int,bool>::iterator itr=VISIBLE_.begin();
+	  itr!=VISIBLE_.end();
+	  ++itr)
+	cout << itr->first << " " << itr->second << endl;
+    }
+  
 
   for (unsigned int i=0; i <M.size();++i)
     M[i].set_attrib(DEFAULT_ATTRIB_[-1]);
@@ -1590,9 +1606,15 @@ void molviewConfig(string specstr)
       if (SHOW_ONLY_ATOMS_[i][0] != "ALL_ATOMS")
 	M[i].show_only(SHOW_ONLY_ATOMS_[i]);
 
+
+  if (DEBUG_)
+    {
+      cout << "VISIBLE_[-1] " << VISIBLE_[-1] << endl;
+    }
   
   for (unsigned int i=0; i <M.size();++i)
-    if (VISIBLE_[-1])
+    if ((VISIBLE_.find(-1)!=VISIBLE_.end())
+	&& VISIBLE_[-1])
       M[i].show();
     else
       M[i].hide();
@@ -1647,6 +1669,9 @@ void SelectFromMenu(int idCommand)
     case CAPTURE_VIEWPORT:
       CaptureViewPort()  ;
       break;
+    case ANIMATE:
+      aniOn = !aniOn;
+      break;
     case MENU_EXIT:
       exit (0);
       break;
@@ -1666,7 +1691,8 @@ int BuildPopupMenu (void)
 
   menu = glutCreateMenu (SelectFromMenu);
   glutAddMenuEntry ("Save Viewport\tS", CAPTURE_VIEWPORT);
-  glutAddMenuEntry ("Exit demo\tQ", MENU_EXIT);
+  glutAddMenuEntry ("Exit\tQ", MENU_EXIT);
+  glutAddMenuEntry ("Animate\tSPACE", ANIMATE);
   glutAddSubMenu("RGB Menu",submenu);
   return menu;
 }
@@ -1752,15 +1778,15 @@ int main(int argc, char *argv[])
   glutReshapeFunc (glutResize);
   glutMotionFunc (glutMotion);
   glutMouseFunc (glutMouse);
-  // glutIdleFunc (glutIdle);
+  // glutIdleFunc (glutIdle); 
   glInit ();
  
 
   zprSelectionFunc(glutDisplay);     /* Selection mode draw function */
   zprPickFunc(pick);              /* Pick event client callback   */
 
-  // BuildPopupMenu ();
-  //glutAttachMenu (GLUT_MIDDLE_BUTTON);
+  BuildPopupMenu ();
+  glutAttachMenu (GLUT_MIDDLE_BUTTON);
 
   glutMainLoop();
   return 1;
@@ -1768,7 +1794,12 @@ int main(int argc, char *argv[])
 //-------------------------------------------------
 
 
-void UTIL_::proc_spec_str(string str)
+void UTIL_::proc_spec_str(string str,
+			  vector<unsigned int>& ATTRIB_CHAIN_INDEX,
+			  vector<unsigned int>& ATTRIB_CHAIN_ATTRIB,
+			  map<unsigned int,
+			  map<unsigned int,
+			  unsigned int> >& ATTRIB_CHAIN_POS)
 {
   if (DEBUG_)
     cout <<  __PRETTY_FUNCTION__ << endl;
@@ -1778,15 +1809,39 @@ void UTIL_::proc_spec_str(string str)
 
   stringstream ss(str);
   string token;
+  ATTRIB_CHAIN_INDEX.clear();
+  ATTRIB_CHAIN_ATTRIB.clear();
+  ATTRIB_CHAIN_POS.clear();
+  unsigned int count=0;
   
   while(getline(ss, token, '#')) 
     {
+      unsigned int count1=0;
       stringstream ss1(token);
-      string token_name,token_val;
-      getline(ss1,token_name,':');
-      getline(ss1,token_val,':');
+      string token_index,token_pos,token_att;
+      string token_tmp;
+      unsigned int count_tmp=0;
+      while(getline(ss1,token_tmp,':'))
+	{
+	  if(count_tmp==0)
+	    token_index=token_tmp;
+	  if(count_tmp==1)
+	    token_pos=token_tmp;
+	  if(count_tmp==2)
+	    token_att=token_tmp;
+	  count_tmp++;	  
+	}
+      stringstream ss2(token_pos);
+      unsigned int token_pos_val;
+      map<unsigned int,unsigned int> token_map;
+      
+      while(ss2>>token_pos_val)
+	token_map[count1++]=token_pos_val;
 
-
+      ATTRIB_CHAIN_INDEX.push_back(atoi(token_index.c_str()));
+      ATTRIB_CHAIN_ATTRIB.push_back(atoi(token_att.c_str()));
+      ATTRIB_CHAIN_POS[count++]=token_map;
     }
+  return;
   
 };
