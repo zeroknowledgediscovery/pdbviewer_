@@ -1,40 +1,8 @@
-#define X_AXIS                  0
-#define Y_AXIS                  1
-#define Z_AXIS                  2
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <string>
-#include <GL/glew.h>
-#include <GL/freeglut.h>
-#include <GL/gl.h>
-#include <GL/gle.h>
-#include <vector>
-#include <cmath>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <set>
-#include <map>
-#include <jpeglib.h>
-#include <boost/algorithm/string.hpp>
-#include "config.h"
-#include <memory.h>
-#include <sys/time.h>
-#include <gl2ps.h>
-
-#include <boost/program_options/options_description.hpp>
-#include <boost/program_options/parsers.hpp>
-#include <boost/program_options/variables_map.hpp>
-#include <boost/tokenizer.hpp>
-#include <boost/token_functions.hpp>
-#include <exception>
-#include <boost/timer/timer.hpp>
+#include "iview.h"
 
 
-using namespace boost::algorithm;
-using namespace std;
-using namespace boost::program_options;
+string GL2PS_EXT=".pdf";
+GLint GL2PS_TYPE=GL2PS_PDF;
 
 //-------------------------------------------------
 
@@ -42,37 +10,9 @@ const string VERSION="\nSMASH v1.31415 \nCopyright Ishanu Chattopadhyay 2017 UCh
 const string EMPTY_ARG_MESSAGE="Exiting. Type -h or --help for usage";
 string snapshotfile="";
 
-/* vector */
-typedef float vec3_t[3]; 
-
-/* enumerations for the mouse buttons */
-enum {
-  UP = 1, 
-  DOWN, 
-};
-enum {
-  CAPTURE_VIEWPORT=1,
-  ATOM_CA,
-  ATOM_CA_CB,
-  ATOM_CA_CB_N,
-  ATOM_CA_CB_N_O,
-  MENU_EXIT
-};
 //-------------------------------------------------
 const double r2d = 180/3.14159265359;
 bool VERBOSE_=true;
-//-------------------------------------------------
-void molviewConfig();
-//-------------------------------------------------
-void CaptureViewPort_HR();
-string GL2PS_EXT=".pdf";
-GLint GL2PS_TYPE=GL2PS_PDF;
-void CaptureViewPort(); 
-void write_JPEG_file (const char *filename, 
-		      int quality,
-		      int image_width, 
-		      int image_height);
-void update_show(vector<string> str);
 //-------------------------------------------------
 //-------------------------------------------------
 string APP_NAME="iView v0.1 : ";
@@ -82,6 +22,8 @@ vector <string> str_CA_CB;
 vector <string> str_CA_CB_N;
 vector <string> str_CA_CB_N_O;
 double SCALE_=1.0;
+
+double MAX_SEPARATION=5.0;
 static string SESSION_ID_="";
 static float ALPHA_=1.0;
 static GLint IDLE_CALL_TIME_=0;
@@ -105,19 +47,13 @@ static double _top    = 0.0;
 static double _zNear  = -10.0;
 static double _zFar   = 10.0;
 
-static double vlen(double,double,double);
-static void   pos(double*,double*,double*,const int,const int,const int*);
-static void   getMatrix();
-static void   invertMatrix(const GLdouble *m, GLdouble *out );
-
 static bool SHOW_CONNX=false;
 static vector < pair< pair<int, unsigned int>, pair<int, unsigned int> > > CONNX_;
 
 bool BACKGROUND_BLACK=true;
+set <double> C_VIOLATION;
 
 //-------------------------------------------------
-void glutMotion(int, int) ;
-void glutMouse(int, int, int, int) ;
 //-------------------------------------------------
 GLfloat ReferencePoint[4] = { 0,0,0,0 };
 map <GLint,pair<unsigned int, unsigned int> > NAME_MAP_;
@@ -275,7 +211,6 @@ void zprPickFunc(void (*f)(GLint name))
   pick = f;
 };
 //-------------------------------------------------
-void pick_handle(GLint n);
 //-------------------------------------------------
 /* Draw in selection mode */
 static void
@@ -317,17 +252,17 @@ zprPick(GLdouble x, GLdouble y,GLdouble delX, GLdouble delY)
 
   /*f (hits!=0)
     {
-      printf("hits = %d\n",hits);
+    printf("hits = %d\n",hits);
 
-      for (i=0,j=0; i<hits; i++)
-	{
-	  printf("\tsize = %u, min = %u, max = %u : ",buffer[j],buffer[j+1],buffer[j+2]);
-	  for (k=0; k < (GLint) buffer[j]; k++)
-	    printf("%u ",buffer[j+3+k]);
-	  printf("\n");
+    for (i=0,j=0; i<hits; i++)
+    {
+    printf("\tsize = %u, min = %u, max = %u : ",buffer[j],buffer[j+1],buffer[j+2]);
+    for (k=0; k < (GLint) buffer[j]; k++)
+    printf("%u ",buffer[j+3+k]);
+    printf("\n");
 
-	  j += 3 + buffer[j];
-	}
+    j += 3 + buffer[j];
+    }
     }
   */
   /* Determine the nearest hit */
@@ -480,32 +415,38 @@ void glutResize (int w, int h)
 }
 //----------------------------------------------
 //----------------------------------------------
-class coord_
+coord_::coord_()
 {
-public:
-  double x,y,z;
-  bool flag;
-
-  coord_(){flag=false;};
-  coord_(double x1, double y1, double z1){ x=x1; y=y1; z=z1;flag=true;};
-  coord_(const coord_ & c){x=c.x;y=c.y;z=c.z;flag=true;};
-
-  friend ostream& operator<< (ostream &, coord_ &);
-  bool empty(){ return flag;};
-
-  coord_   operator+(const coord_ &C)
-  {
-    coord_  c(x+C.x, y+C.y,z+C.z);
-    return c;
-  }; 
-
-  coord_   operator*(double a)
-  {
-    coord_  c(x*a,y*a,z*a);
-    return c;
-  }; 
-
+  flag=false;
 };
+
+coord_::coord_(double x1, double y1, double z1)
+{
+  x=x1; y=y1; z=z1;flag=true;
+}
+
+coord_::coord_(const coord_ & c)
+{
+  x=c.x;y=c.y;z=c.z;flag=true;
+};
+
+bool coord_::empty()
+{
+  return flag;
+}
+
+coord_   coord_::operator+(const coord_ &C)
+{
+  coord_  c(x+C.x, y+C.y,z+C.z);
+  return c;
+}; 
+
+coord_   coord_::operator*(double a)
+{
+  coord_  c(x*a,y*a,z*a);
+  return c;
+}; 
+
 //-------------------------------------------------
 ostream& operator << (ostream &out, coord_ &C)
 {
@@ -513,64 +454,59 @@ ostream& operator << (ostream &out, coord_ &C)
   return out;
 };
 //-------------------------------------------------
-class color_
-{
-public:
-  double x,y,z,a;
+color_::color_()
+{};
 
-  color_ (){};
-  color_(double x1, double y1, double z1)
-  { 
-    x=x1;
-    if (x1 > 1.0)
-      x=1.0;
-    if (x1 < 0)
-      x=0.0;
+color_::color_(double x1, double y1, double z1)
+{ 
+  x=x1;
+  if (x1 > 1.0)
+    x=1.0;
+  if (x1 < 0)
+    x=0.0;
 
-    y=y1;
-    if (y1 > 1.0)
-      y=1.0;
-    if (y1 < 0)
-      y=0.0;
+  y=y1;
+  if (y1 > 1.0)
+    y=1.0;
+  if (y1 < 0)
+    y=0.0;
 
-    z=z1;
-    if (z1 > 1.0)
-      z=1.0;
-    if (z1 < 0)
-      z=0.0;
+  z=z1;
+  if (z1 > 1.0)
+    z=1.0;
+  if (z1 < 0)
+    z=0.0;
 
-    a=ALPHA_;
-    if (a > 1.0)
-      a = 1.0;
-  };
-
-  color_(double x1, double y1, double z1, double a1)
-  { 
-    x=x1;
-    if (x1 > 1.0)
-      x=1.0;
-    if (x1 < 0)
-      x=0.0;
-
-    y=y1;
-    if (y1 > 1.0)
-      y=1.0;
-    if (y1 < 0)
-      y=0.0;
-
-    z=z1;
-    if (z1 > 1.0)
-      z=1.0;
-    if (z1 < 0)
-      z=0.0;
-
-    a=a1;
-    if (a > 1.0)
-      a = 1.0;
-  };
-
-  friend ostream& operator<< (ostream &, color_ &);
+  a=ALPHA_;
+  if (a > 1.0)
+    a = 1.0;
 };
+
+color_::color_(double x1, double y1, double z1, double a1)
+{ 
+  x=x1;
+  if (x1 > 1.0)
+    x=1.0;
+  if (x1 < 0)
+    x=0.0;
+
+  y=y1;
+  if (y1 > 1.0)
+    y=1.0;
+  if (y1 < 0)
+    y=0.0;
+
+  z=z1;
+  if (z1 > 1.0)
+    z=1.0;
+  if (z1 < 0)
+    z=0.0;
+
+  a=a1;
+  if (a > 1.0)
+    a = 1.0;
+};
+
 //-------------------------------------------------
 ostream& operator<< (ostream & out, color_ & col)
 {
@@ -578,120 +514,114 @@ ostream& operator<< (ostream & out, color_ & col)
   return out;
 };
 //-------------------------------------------------
-class color_map_
+
+color_map_::color_map_(){};
+color_map_::color_map_(map<unsigned int, 
+		       map<unsigned int, 
+		       double> > cmat)
 {
-  map <unsigned int, color_> color_map;
-  map <unsigned int, bool> mutable_;
-  color_ DEFAULT_COLOR_;
+  for (map<unsigned int, 
+	 map<unsigned int,
+	 double> >::iterator itr=cmat.begin();
+       itr != cmat.end();
+       ++itr)
+    if ((itr->second.find(0) != itr->second.end())
+	&& (itr->second.find(1) != itr->second.end())
+	&& (itr->second.find(2) != itr->second.end())
+	)
+      {
+	if ((itr->second.find(3) == itr->second.end()))
+	  color_map[itr->first] = 
+	    color_ ((itr->second)[0],
+		    (itr->second)[1],
+		    (itr->second)[2]); 
+	else
+	  color_map[itr->first] = 
+	    color_ ((itr->second)[0],
+		    (itr->second)[1],
+		    (itr->second)[2], 
+		    (itr->second)[3]); 
+      }
 
-public:
-  /*! Constructor */
-  color_map_(){};
-  color_map_(map<unsigned int, 
-	     map<unsigned int, 
-	     double> > cmat)
-  {
-    for (map<unsigned int, 
-	   map<unsigned int,
-	   double> >::iterator itr=cmat.begin();
-	 itr != cmat.end();
-	 ++itr)
-      if ((itr->second.find(0) != itr->second.end())
-	  && (itr->second.find(1) != itr->second.end())
-	  && (itr->second.find(2) != itr->second.end())
-	  )
-	{
-	  if ((itr->second.find(3) == itr->second.end()))
-	    color_map[itr->first] = 
-	      color_ ((itr->second)[0],
-		      (itr->second)[1],
-		      (itr->second)[2]); 
-	  else
-	    color_map[itr->first] = 
-	      color_ ((itr->second)[0],
-		      (itr->second)[1],
-		      (itr->second)[2], 
-		      (itr->second)[3]); 
-	}
-
-    for (map<unsigned int, 
-	   map<unsigned int, 
-	   double> >::iterator itr=cmat.begin();
-	 itr != cmat.end();
-	 ++itr)
-      if ((itr->second.find(4) != itr->second.end()))
-	mutable_[itr->first] = (itr->second)[4];
-      else
-	mutable_[itr->first] = false;
-
-    DEFAULT_COLOR_ = color_ (.2,.2,.2);
-  };
-
-  color_map_(map<unsigned int, 
-	     map<unsigned int, 
-	     double> > cmat, 
-	     color_ def)
-  {
-    for (map<unsigned int,
-	   map<unsigned int,
-	   double> >::iterator itr=cmat.begin();
-	 itr != cmat.end();
-	 ++itr)
-      if ((itr->second.find(0) != itr->second.end())
-	  && (itr->second.find(1) != itr->second.end())
-	  && (itr->second.find(2) != itr->second.end())
-	  )
-	{
-	  if ((itr->second.find(3) == itr->second.end()))
-	    color_map[itr->first] = 
-	      color_ ((itr->second)[0],
-		      (itr->second)[1],
-		      (itr->second)[2]); 
-	  else
-	    color_map[itr->first] = 
-	      color_ ((itr->second)[0],
-		      (itr->second)[1],
-		      (itr->second)[2], 
-		      (itr->second)[3]); 
-	}
-
-    for (map<unsigned int, 
-	   map<unsigned int, 
-	   double> >::iterator itr=cmat.begin();
-	 itr != cmat.end();
-	 ++itr)
-      if ((itr->second.find(4) != itr->second.end()))
-	mutable_[itr->first] = (itr->second)[4];
-      else
-	mutable_[itr->first] = false;
-
-    DEFAULT_COLOR_ = def;
-  };
-
-  /*! set alpha */
-  void set_alpha(double alpha_factor)
-  {
-    for (map <unsigned int, color_>::iterator itr=color_map.begin();
-	 itr!=color_map.end();
-	 ++itr)
-      if (mutable_[itr->first])
-	{
-	  if (itr->second.a * alpha_factor < 1.0)
-	    itr->second.a *= alpha_factor;
-	  else 
-	    itr->second.a = 1.0;
-	}
-  };
-
-  /*! Accessor */
-  color_ &get(unsigned int C)
-  {
-    if (color_map.find(C) != color_map.end())
-      return color_map[C];
+  for (map<unsigned int, 
+	 map<unsigned int, 
+	 double> >::iterator itr=cmat.begin();
+       itr != cmat.end();
+       ++itr)
+    if ((itr->second.find(4) != itr->second.end()))
+      mutable_[itr->first] = (itr->second)[4];
     else
-      return DEFAULT_COLOR_;
-  }
+      mutable_[itr->first] = false;
+
+  DEFAULT_COLOR_ = color_ (.2,.2,.2);
 };
+
+color_map_::color_map_(map<unsigned int, 
+		       map<unsigned int, 
+		       double> > cmat, 
+		       color_ def)
+{
+  for (map<unsigned int,
+	 map<unsigned int,
+	 double> >::iterator itr=cmat.begin();
+       itr != cmat.end();
+       ++itr)
+    if ((itr->second.find(0) != itr->second.end())
+	&& (itr->second.find(1) != itr->second.end())
+	&& (itr->second.find(2) != itr->second.end())
+	)
+      {
+	if ((itr->second.find(3) == itr->second.end()))
+	  color_map[itr->first] = 
+	    color_ ((itr->second)[0],
+		    (itr->second)[1],
+		    (itr->second)[2]); 
+	else
+	  color_map[itr->first] = 
+	    color_ ((itr->second)[0],
+		    (itr->second)[1],
+		    (itr->second)[2], 
+		    (itr->second)[3]); 
+      }
+
+  for (map<unsigned int, 
+	 map<unsigned int, 
+	 double> >::iterator itr=cmat.begin();
+       itr != cmat.end();
+       ++itr)
+    if ((itr->second.find(4) != itr->second.end()))
+      mutable_[itr->first] = (itr->second)[4];
+    else
+      mutable_[itr->first] = false;
+
+  DEFAULT_COLOR_ = def;
+};
+
+/*! set alpha */
+void color_map_::set_alpha(double alpha_factor)
+{
+  for (map <unsigned int, color_>::iterator itr=color_map.begin();
+       itr!=color_map.end();
+       ++itr)
+    if (mutable_[itr->first])
+      {
+	if (itr->second.a * alpha_factor < 1.0)
+	  itr->second.a *= alpha_factor;
+	else 
+	  itr->second.a = 1.0;
+      }
+};
+
+/*! Accessor */
+color_ & color_map_::get(unsigned int C)
+{
+  if (color_map.find(C) != color_map.end())
+    return color_map[C];
+  else
+    return DEFAULT_COLOR_;
+};
+
+
 //-------------------------------------------------
 color_map_ *COLOR;
 //-------------------------------------------------
@@ -754,232 +684,208 @@ const GLfloat high_shininess[] = { 100.0f };
 //-------------------------------------------------
 // atoms are defined by chain pos, attrib flag, 
 
-class atom_
+atom_::atom_(){};
+atom_::atom_(string atom_name, coord_ atom_coord, unsigned int pos)
 {
-private:
-
-  string a_name;
-  coord_ a_coord;
-  unsigned int a_chain_pos;
-  string aa;
-  bool a_visible;
-  unsigned int a_attrib;
-
-public:
-  /*! Constructors */
-  atom_(){};
-  atom_(string atom_name, coord_ atom_coord, unsigned int pos)
-  {
-    a_name = atom_name;
-    a_coord = coord_ (atom_coord.x, atom_coord.y,atom_coord.z);
-    a_chain_pos = pos;
-    a_visible = true;
-    aa = "";
-    a_attrib = 0;
-  }
-  atom_(string atom_name, coord_ atom_coord, unsigned int pos, string aac)
-  {
-    a_name = atom_name;
-    a_coord = coord_ (atom_coord.x, atom_coord.y,atom_coord.z);
-    a_chain_pos = pos;
-    aa = aac;
-    a_visible = true;
-    a_attrib = 0;
-  }
-  atom_(string atom_name, coord_ atom_coord, unsigned int pos, unsigned int C)
-  {
-    a_name = atom_name;
-    a_coord = coord_ (atom_coord.x, atom_coord.y,atom_coord.z);
-    a_chain_pos = pos;
-    a_visible = true;
-    aa = "";
-    a_attrib = C;
-  }
-  atom_(string atom_name, coord_ atom_coord, unsigned int pos, unsigned int C, bool vis)
-  {
-    a_name = atom_name;
-    a_coord = coord_ (atom_coord.x, atom_coord.y,atom_coord.z);
-    a_chain_pos = pos;
-    a_visible = vis;
-    aa = "";
-    a_attrib = C;
-  }
-
-  atom_(const atom_ &A)
-  {
-    a_name = A.a_name;
-    a_coord = A.a_coord;
-    a_chain_pos = A.a_chain_pos;
-    aa = A.aa;
-    a_visible = A.a_visible;
-    a_attrib = A.a_attrib;
-  };
-
-  /*! accessor functions */
-  coord_ & coord(){return a_coord;};
-  string name(){return a_name;};
-  unsigned int pos(){return a_chain_pos;};
-  string amin(){return aa;};
-  bool visible(){return a_visible;};
-  unsigned int attrib(){return a_attrib;};
-
-  /*! Function to update atom properties */
-  void set_coord(coord_ C){a_coord = C;};
-  void show(){a_visible = true;};
-  void hide(){a_visible = false;};
-  void set_aa(string aac){aa = aac;};
-  void set_attrib(unsigned int C){a_attrib = C;};
-
+  a_name = atom_name;
+  a_coord = coord_ (atom_coord.x, atom_coord.y,atom_coord.z);
+  a_chain_pos = pos;
+  a_visible = true;
+  aa = "";
+  a_attrib = 0;
 };
+atom_::atom_(string atom_name, coord_ atom_coord, unsigned int pos, string aac)
+{
+  a_name = atom_name;
+  a_coord = coord_ (atom_coord.x, atom_coord.y,atom_coord.z);
+  a_chain_pos = pos;
+  aa = aac;
+  a_visible = true;
+  a_attrib = 0;
+};
+atom_::atom_(string atom_name, coord_ atom_coord, unsigned int pos, unsigned int C)
+{
+  a_name = atom_name;
+  a_coord = coord_ (atom_coord.x, atom_coord.y,atom_coord.z);
+  a_chain_pos = pos;
+  a_visible = true;
+  aa = "";
+  a_attrib = C;
+};
+atom_::atom_(string atom_name, coord_ atom_coord, unsigned int pos, unsigned int C, bool vis)
+{
+  a_name = atom_name;
+  a_coord = coord_ (atom_coord.x, atom_coord.y,atom_coord.z);
+  a_chain_pos = pos;
+  a_visible = vis;
+  aa = "";
+  a_attrib = C;
+};
+
+atom_::atom_(const atom_ &A)
+{
+  a_name = A.a_name;
+  a_coord = A.a_coord;
+  a_chain_pos = A.a_chain_pos;
+  aa = A.aa;
+  a_visible = A.a_visible;
+  a_attrib = A.a_attrib;
+};
+
+/*! accessor functions */
+coord_ & atom_::coord(){return a_coord;};
+string atom_::name(){return a_name;};
+unsigned int atom_::pos(){return a_chain_pos;};
+string atom_::amin(){return aa;};
+bool atom_::visible(){return a_visible;};
+unsigned int atom_::attrib(){return a_attrib;};
+
+/*! Function to update atom properties */
+void atom_::set_coord(coord_ C){a_coord = C;};
+void atom_::show(){a_visible = true;};
+void atom_::hide(){a_visible = false;};
+void atom_::set_aa(string aac){aa = aac;};
+void atom_::set_attrib(unsigned int C){a_attrib = C;};
+
 //--------------------------------------------------------------
 //------------------------------------------
-class molecule_
+
+molecule_::molecule_(){};
+molecule_::molecule_(vector <atom_> A)
 {
-protected:
-  vector <atom_> atoms;
-  unsigned int c_length;
-  unsigned int n_atoms;
+  m_visible=true;
+  atoms = A;
+  n_atoms = atoms.size();
+  set <unsigned int> cpos;
+  for (vector <atom_>::iterator itr=atoms.begin();
+       itr!= atoms.end();
+       ++itr)
+    cpos.insert(itr->pos());
+  c_length=cpos.size();
 
-  map <unsigned int, vector <unsigned int> > chain_pos_atoms;
-  bool m_visible;
-
-public:
-  /*!    Constructor  */
-  molecule_(){};
-  molecule_(vector <atom_> A)
-  {
-    m_visible=true;
-    atoms = A;
-    n_atoms = atoms.size();
-    set <unsigned int> cpos;
-    for (vector <atom_>::iterator itr=atoms.begin();
-	 itr!= atoms.end();
-	 ++itr)
-      cpos.insert(itr->pos());
-    c_length=cpos.size();
-
-    for (unsigned int i=0; i < n_atoms;++i)
-      chain_pos_atoms[atoms[i].pos()].push_back(i);
-  };
-
-  /*!    Accessor  */
-  size_t size(){return n_atoms;};
-  unsigned int chain_length(){return c_length;};
-  atom_ & get_atom(unsigned int index)
-  {
-    if (index > n_atoms)
-      index = n_atoms;
-    return atoms[index];
-  }
-  bool visible(){return m_visible;};
-
-  /*!    Initialize attribute for atoms  */
-  void init_attrib()
-  {
-    for(vector <atom_>::iterator itr=atoms.begin();
-	itr != atoms.end();
-	++itr)
-      itr->set_attrib(0);
-  };
-
-  /*!    Initialize attribute for atoms  */
-  void set_attrib(unsigned int C)
-  {
-    for(vector <atom_>::iterator itr=atoms.begin();
-	itr != atoms.end();
-	++itr)
-      itr->set_attrib(C);
-  };
-
-  /*!    Set attribute for atoms  */
-  void set_attrib(vector <unsigned int> index, unsigned int C)
-  {
-    for (unsigned int i=0; i < index.size();++i)
-      if (index[i] < n_atoms)
-	atoms[index[i]].set_attrib(C);
-  };
-
-  /*! Set attribute for atoms  */
-  void set_attrib_ch(vector <unsigned int> index, unsigned int C)
-  {
-
-    for (unsigned int i=0; i < index.size();++i)
-      for (unsigned int j=0; j < chain_pos_atoms[index[i]].size(); ++j)
-	atoms[chain_pos_atoms[index[i]][j]].set_attrib(C);
-  };
-
-  /*! update atom visibility based on name */
-  void hide(string namE)
-  {
-    for(vector <atom_>::iterator itr=atoms.begin();
-	itr != atoms.end();
-	++itr)
-      if (itr->name() == namE)
-	itr->hide();
-  };
-
-  /*! update atom visibility based on name */
-  void hide_only(vector <string> name_v)
-  {
-    set <string> s_name_v(name_v.begin(), name_v.end());
-    for(vector <atom_>::iterator itr=atoms.begin();
-	itr != atoms.end();
-	++itr)
-      if (s_name_v.find(itr->name()) != s_name_v.end() )
-	itr->hide();
-      else
-	itr->show();
-  };
-
-  /*! update atom visibility based on name */
-  void show(string namE)
-  {
-    for(vector <atom_>::iterator itr=atoms.begin();
-	itr != atoms.end();
-	++itr)
-      if (itr->name() == namE)
-	itr->show();
-  };
-
-  /*! update atom visibility based on name */
-  void show_only(vector <string> name_v)
-  {
-    set <string> s_name_v(name_v.begin(), name_v.end());
-    for(vector <atom_>::iterator itr=atoms.begin();
-	itr != atoms.end();
-	++itr)
-      if (s_name_v.find(itr->name()) != s_name_v.end() )
-	itr->show();
-      else
-	itr->hide();
-  };
-
-  /*! update molecule  visibility  */
-  void hide(){m_visible=false;  };
-
-  /*! update  molecule  visibility  */
-  void show(){m_visible=true;  };
-  
-  /*! update atom visibility based on amin */
-  void hide_a(string namE)
-  {
-    for(vector <atom_>::iterator itr=atoms.begin();
-	itr != atoms.end();
-	++itr)
-      if (itr->amin() == namE)
-	itr->hide();
-  };
-  /*! update atom visibility based on amin */
-  void show_a(string namE)
-  {
-    for(vector <atom_>::iterator itr=atoms.begin();
-	itr != atoms.end();
-	++itr)
-      if (itr->amin() == namE)
-	itr->show();
-  };
+  for (unsigned int i=0; i < n_atoms;++i)
+    chain_pos_atoms[atoms[i].pos()].push_back(i);
 };
-//--------------------------------------------------------
+
+/*!    Accessor  */
+size_t molecule_::size(){return n_atoms;};
+unsigned int molecule_::chain_length(){return c_length;};
+atom_ & molecule_::get_atom(unsigned int index)
+{
+  if (index > n_atoms)
+    index = n_atoms;
+  return atoms[index];
+}
+bool molecule_::visible(){return m_visible;};
+
+/*!    Initialize attribute for atoms  */
+void molecule_::init_attrib()
+{
+  for(vector <atom_>::iterator itr=atoms.begin();
+      itr != atoms.end();
+      ++itr)
+    itr->set_attrib(0);
+};
+
+/*!    Initialize attribute for atoms  */
+void molecule_::set_attrib(unsigned int C)
+{
+  for(vector <atom_>::iterator itr=atoms.begin();
+      itr != atoms.end();
+      ++itr)
+    itr->set_attrib(C);
+};
+
+/*!    Set attribute for atoms  */
+void molecule_::set_attrib(vector <unsigned int> index, unsigned int C)
+{
+  for (unsigned int i=0; i < index.size();++i)
+    if (index[i] < n_atoms)
+      atoms[index[i]].set_attrib(C);
+};
+
+/*! Set attribute for atoms  */
+void molecule_::set_attrib_ch(vector <unsigned int> index, unsigned int C)
+{
+
+  for (unsigned int i=0; i < index.size();++i)
+    for (unsigned int j=0; j < chain_pos_atoms[index[i]].size(); ++j)
+      atoms[chain_pos_atoms[index[i]][j]].set_attrib(C);
+};
+
+/*! update atom visibility based on name */
+void molecule_::hide(string namE)
+{
+  for(vector <atom_>::iterator itr=atoms.begin();
+      itr != atoms.end();
+      ++itr)
+    if (itr->name() == namE)
+      itr->hide();
+};
+
+/*! update atom visibility based on name */
+void molecule_::hide_only(vector <string> name_v)
+{
+  set <string> s_name_v(name_v.begin(), name_v.end());
+  for(vector <atom_>::iterator itr=atoms.begin();
+      itr != atoms.end();
+      ++itr)
+    if (s_name_v.find(itr->name()) != s_name_v.end() )
+      itr->hide();
+    else
+      itr->show();
+};
+
+/*! update atom visibility based on name */
+void molecule_::show(string namE)
+{
+  for(vector <atom_>::iterator itr=atoms.begin();
+      itr != atoms.end();
+      ++itr)
+    if (itr->name() == namE)
+      itr->show();
+};
+
+/*! update atom visibility based on name */
+void molecule_::show_only(vector <string> name_v)
+{
+  set <string> s_name_v(name_v.begin(), name_v.end());
+  for(vector <atom_>::iterator itr=atoms.begin();
+      itr != atoms.end();
+      ++itr)
+    if (s_name_v.find(itr->name()) != s_name_v.end() )
+      itr->show();
+    else
+      itr->hide();
+};
+
+/*! update molecule  visibility  */
+void molecule_::hide(){m_visible=false;  };
+
+/*! update  molecule  visibility  */
+void molecule_::show(){m_visible=true;  };
+  
+/*! update atom visibility based on amin */
+void molecule_::hide_a(string namE)
+{
+  for(vector <atom_>::iterator itr=atoms.begin();
+      itr != atoms.end();
+      ++itr)
+    if (itr->amin() == namE)
+      itr->hide();
+};
+/*! update atom visibility based on amin */
+void molecule_::show_a(string namE)
+{
+  for(vector <atom_>::iterator itr=atoms.begin();
+      itr != atoms.end();
+      ++itr)
+    if (itr->amin() == namE)
+      itr->show();
+};
+
+
+
 //--------------------------------------------------------
 vector <molecule_ > M;
 //-------------------------------------------------------
@@ -999,6 +905,12 @@ void drawStick(coord_ p1,coord_ p2)
   double vy=p2.y-p1.y;
   double vz=p2.z-p1.z;
   double c_height=sqrt(vx*vx+vy*vy+vz*vz);
+
+  if ((c_height>MAX_SEPARATION) 
+      && (C_VIOLATION.insert(c_height).second))
+    cout << "MAX C VIOLATION WARNING " << c_height << endl;
+  return;
+
   double  rx=-vy*vz,  ry=vx*vz, ax=0.0;
   if (vz==0)
     {
@@ -1036,6 +948,13 @@ void drawStick(coord_ p1,coord_ p2, color_ color)
   double vy=p2.y-p1.y;
   double vz=p2.z-p1.z;
   double c_height=sqrt(vx*vx+vy*vy+vz*vz);
+
+  if (c_height>MAX_SEPARATION)
+    {
+      cout << c_height << endl;
+      return;
+    }
+
   double  rx=-vy*vz,  ry=vx*vz, ax=0.0;
   if (vz==0)
     {
@@ -1233,7 +1152,7 @@ void glutKeyboard (unsigned char key, int x, int y)
     case 's':
       /* capture viewport */
       if (glutGetModifiers() != GLUT_ACTIVE_ALT)
-	  CaptureViewPort();
+	CaptureViewPort();
       else
 	{
 	  CaptureViewPort_HR();
@@ -1272,7 +1191,8 @@ void glutKeyboard (unsigned char key, int x, int y)
 /*! Read pdb file */
 void data_reader(string pdb_file,
 		 string flag_line,
-		 vector < molecule_ > & M)
+		 vector < molecule_ > & M,
+		 string SPECSTR)
 {
   ifstream DATA(pdb_file.c_str());
   string line;
@@ -1325,7 +1245,7 @@ void data_reader(string pdb_file,
     for (unsigned int i=0; i < M[m].size();++i)
       M[m].get_atom(i).set_coord(M[m].get_atom(i).coord() + Sm);
 
-  molviewConfig();
+  molviewConfig(SPECSTR);
 
 
   for (unsigned int i=0; i<M.size();++i)
@@ -1390,7 +1310,7 @@ void CaptureViewPort()
   winW = viewport[2];  
   winH = viewport[3];  
   image_buffer = new GLubyte[winW*3*winH];
-   //read pixel from frame buffer  
+  //read pixel from frame buffer  
   glPixelStorei(GL_PACK_ALIGNMENT,1);  
   glPixelStorei(GL_PACK_ROW_LENGTH, 0);  
   glPixelStorei(GL_PACK_SKIP_ROWS, 0);  
@@ -1502,7 +1422,7 @@ void glInit() {
 }
 //-------------------------------------------------
 
-void molviewConfig()
+void molviewConfig(string specstr)
 {
   unsigned int GLOBAL_DEFAULT_ATTRIB;
   vector <unsigned int> DEFAULT_ATTRIB_INDEX;
@@ -1549,6 +1469,10 @@ void molviewConfig()
   cfg.set(BACKGROUND_BLACK,"BACKGROUND_BLACK");
 
   APP_NAME += APP_NAME_EXT;
+
+
+  UTIL_::proc_spec_str(specstr);
+
 
   if (gl2ps_type=="")
     {
@@ -1689,11 +1613,11 @@ void molviewConfig()
 			 DEFAULT_COLOR[3]));
 
   /* for (map <unsigned int, map<unsigned int, double> >::iterator itr=COLOR_MAP.begin();
-       itr!=COLOR_MAP.end();
-       ++itr)
-    {
-      cout << itr->first << " " <<  itr->second[0] << " " <<  itr->second[1] << " " << itr->second[2] << " " <<itr->second[3] << " " <<  itr->second[4] << endl;
-    }
+     itr!=COLOR_MAP.end();
+     ++itr)
+     {
+     cout << itr->first << " " <<  itr->second[0] << " " <<  itr->second[1] << " " << itr->second[2] << " " <<itr->second[3] << " " <<  itr->second[4] << endl;
+     }
   */
 };
 //------------------------------------------------------------
@@ -1816,9 +1740,7 @@ int main(int argc, char *argv[])
   if (vm.count("verbose"))
     VERBOSE_=vm["verbose"].as<bool>();
 
-
-
-  data_reader(pdbfile, "ATOM", M);
+  data_reader(pdbfile, "ATOM", M, specstring);
 
   glutInit(&argc, argv);
   glutInitDisplayMode (GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH | GLUT_MULTISAMPLE);
@@ -1844,3 +1766,27 @@ int main(int argc, char *argv[])
   return 1;
 }
 //-------------------------------------------------
+
+
+void UTIL_::proc_spec_str(string str)
+{
+  if (DEBUG_)
+    cout <<  __PRETTY_FUNCTION__ << endl;
+
+  if (str=="")
+    return;
+
+  stringstream ss(str);
+  string token;
+  
+  while(getline(ss, token, '#')) 
+    {
+      stringstream ss1(token);
+      string token_name,token_val;
+      getline(ss1,token_name,':');
+      getline(ss1,token_val,':');
+
+
+    }
+  
+};

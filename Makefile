@@ -16,7 +16,7 @@ config.o: config.cc $(DEPS)
 iview.o: 	iview.cc 
 	$(CC) $(INCLUDES) -c -o $@ $< $(CFLAGS)
 iview:	iview.o config.o
-	$(CC)  $(CFLAGS) -o $@ $^ -lpng -lz -lgl2ps -lGL -lglut -lX11 -lXext -lGLU -lgle -ljpeg  -lgsl -lgslcblas -lm  -lgomp -lboost_system -lboost_thread -lboost_program_options -lboost_timer  -lboost_chrono
+	$(CC)  $(CFLAGS) -o $@ $^ -lpng -lz -lgl2ps -lGL -lglut -lX11 -lXext -lGLU -lgle -ljpeg  -lgsl -lgslcblas -lm  -lgomp -lboost_system  -lboost_program_options -lboost_timer  -lboost_chrono
 
 
 mvbin:
