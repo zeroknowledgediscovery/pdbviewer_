@@ -1,10 +1,10 @@
-CC = g++ -std=gnu++11
-CFLAGS = -O3  -fopenmp -Wall -Wextra -Wunused  
+CC = g++ 
+CFLAGS = -std=gnu++11 -O3  -fopenmp -Wall -Wextra -Wunused  
 #-lboost_thread-mt -O3 -Ofast
-LIB = ../../../../lib
+LIB = 
 DEPS = 
-INCLUDES = -I./
-GLE_PATH=$(LIB)
+INCLUDES = 
+#GLE_PATH=$(LIB)
 
 OBJ = iview
 all:	$(OBJ) mvbin clean
