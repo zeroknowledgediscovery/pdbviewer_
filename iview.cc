@@ -21,6 +21,10 @@ vector <string> str_CA;
 vector <string> str_CA_CB;
 vector <string> str_CA_CB_N;
 vector <string> str_CA_CB_N_O;
+vector <string> str_ALL;
+
+set <string> ALL_ATOM_NAMES;
+
 double SCALE_=1.0;
 
 double MAX_SEPARATION=5.0;
@@ -58,6 +62,19 @@ set <double> C_VIOLATION;
 GLfloat ReferencePoint[4] = { 0,0,0,0 };
 map <GLint,pair<unsigned int, unsigned int> > NAME_MAP_;
 bool update_name_map=true;
+
+//-------------------------------------------------
+//-------------------------------------------------
+vector<string> set2vec(set<string>& S)
+{
+  vector<string> vec;
+  for(set<string>::iterator itr=S.begin();
+      itr!=S.end();
+      ++itr)
+    vec.push_back(*itr);
+
+  return vec;
+}
 //-------------------------------------------------
 static double
 vlen(double x,double y,double z)
@@ -224,7 +241,7 @@ zprPick(GLdouble x, GLdouble y,GLdouble delX, GLdouble delY)
   GLdouble projection[16];
 
   GLint hits;
-  GLint i,j;
+  GLint i,j,k;
 
   GLint  min  = -1;
   GLuint minZ = -1;
@@ -250,21 +267,22 @@ zprPick(GLdouble x, GLdouble y,GLdouble delX, GLdouble delY)
 
   /* Diagnostic output to stdout */
 
-  /*f (hits!=0)
-    {
-    printf("hits = %d\n",hits);
-
-    for (i=0,j=0; i<hits; i++)
-    {
-    printf("\tsize = %u, min = %u, max = %u : ",buffer[j],buffer[j+1],buffer[j+2]);
-    for (k=0; k < (GLint) buffer[j]; k++)
-    printf("%u ",buffer[j+3+k]);
-    printf("\n");
-
-    j += 3 + buffer[j];
-    }
-    }
-  */
+  if(DEBUG_)
+    if (hits!=0)
+      {
+	printf("hits = %d\n",hits);
+	
+	for (i=0,j=0; i<hits; i++)
+	  {
+	    printf("\tsize = %u, min = %u, max = %u : ",buffer[j],buffer[j+1],buffer[j+2]);
+	    for (k=0; k < (GLint) buffer[j]; k++)
+	      printf("%u ",buffer[j+3+k]);
+	    printf("\n");
+	    
+	    j += 3 + buffer[j];
+	  }
+      }
+  
   /* Determine the nearest hit */
   if (hits)
     {
@@ -451,6 +469,15 @@ coord_   coord_::operator*(double a)
 ostream& operator << (ostream &out, coord_ &C)
 {
   out << C.x << " " << C.y << " " << C.z;
+  return out;
+};
+//-------------------------------------------------
+ostream& operator << (ostream &out, vector<string> &C)
+{
+  for(vector<string>::iterator itr=C.begin();
+      itr!=C.end();
+      ++itr)
+    out << *itr << " ";
   return out;
 };
 //-------------------------------------------------
@@ -1168,7 +1195,7 @@ void glutKeyboard (unsigned char key, int x, int y)
       else
 	COLOR->set_alpha(0.95);
       break;
-    case 'a':
+    case 'c':
       if (glutGetModifiers() == GLUT_ACTIVE_ALT)
 	update_show(str_CA);
       break;
@@ -1183,6 +1210,10 @@ void glutKeyboard (unsigned char key, int x, int y)
     case 'o':
       if (glutGetModifiers() == GLUT_ACTIVE_ALT)
 	update_show(str_CA_CB_N_O);
+      break;
+    case 'a':
+      if (glutGetModifiers() == GLUT_ACTIVE_ALT)
+	update_show(str_ALL);
       break;
     case ' ':
       /* animation on/off */
@@ -1223,13 +1254,19 @@ void data_reader(string pdb_file,
 	  if ((chain_pos < last_pos ))
 	    if (!A.empty())
 	      {
+		if (DEBUG_)
+		  cout << "## ATOMS READ: " << A.size() << " chain_len: " <<  last_pos<< endl;
 		M.push_back(molecule_ (A));
 		A.clear();
 	      }
+	  ALL_ATOM_NAMES.insert(atom_name);
 	  A.push_back(atom_ (atom_name,atom_coord,chain_pos,aa) );  
 	  last_pos = chain_pos;
 	}
     }
+  if (DEBUG_)
+    cout << "## ATOMS READ: " << A.size() << " chain_len: " <<  last_pos << endl;
+
   M.push_back(molecule_ (A) );
 
   coord_ S(0,0,0);
@@ -1241,7 +1278,7 @@ void data_reader(string pdb_file,
 	S = S + M[m].get_atom(i).coord();
       Ms += M[m].size();
     }
-    
+     
   S = S*(1/(Ms + 0.0));
   coord_ Sm(-S.x,-S.y,-S.z);
   
@@ -1409,7 +1446,9 @@ void glInit() {
   str_CA_CB_N.push_back("N");
   str_CA_CB_N_O=str_CA_CB_N;
   str_CA_CB_N_O.push_back("O");
+  str_ALL=set2vec(ALL_ATOM_NAMES);
 
+  
   struct timeval tim;  
   gettimeofday(&tim, NULL);  
   // double t0=tim.tv_sec;
@@ -1785,8 +1824,8 @@ int main(int argc, char *argv[])
   zprSelectionFunc(glutDisplay);     /* Selection mode draw function */
   zprPickFunc(pick);              /* Pick event client callback   */
 
-  BuildPopupMenu ();
-  glutAttachMenu (GLUT_MIDDLE_BUTTON);
+  //BuildPopupMenu ();
+  //glutAttachMenu (GLUT_MIDDLE_BUTTON);
 
   glutMainLoop();
   return 1;

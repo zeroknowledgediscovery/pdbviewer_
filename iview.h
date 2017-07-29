@@ -275,6 +275,8 @@ namespace UTIL_
   void proc_spec_str(string,vector<unsigned int>& ATTRIB_CHAIN_INDEX,
 			  vector<unsigned int>& ATTRIB_CHAIN_ATTRIB,
 			  map<unsigned int,map<unsigned int,unsigned int> >& ATTRIB_CHAIN_POS);
+  vector<string> set2vec(set<string>&);
+
 };
 
 
