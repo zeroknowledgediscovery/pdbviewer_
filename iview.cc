@@ -1349,7 +1349,8 @@ void CaptureViewPort()
   glGetIntegerv(GL_VIEWPORT, viewport);  
   glFinish(); //finish all commands of OpenGL  
   winW = viewport[2];  
-  winH = viewport[3];  
+  winH = viewport[3];
+  cout << winW << " " << winH << endl;
   image_buffer = new GLubyte[winW*3*winH];
   //read pixel from frame buffer  
   glPixelStorei(GL_PACK_ALIGNMENT,1);  
@@ -1357,7 +1358,7 @@ void CaptureViewPort()
   glPixelStorei(GL_PACK_SKIP_ROWS, 0);  
   glPixelStorei(GL_PACK_SKIP_PIXELS, 0); 
   
-  glReadPixels(0, 0, winW, winH, 
+  glReadPixels(viewport[0], viewport[1], winW, winH, 
 	       GL_RGB, 
 	       GL_UNSIGNED_BYTE, 
 	       image_buffer);  
@@ -1417,7 +1418,8 @@ void glInit() {
   glEnable(GL_NORMALIZE);
   glEnable(GL_COLOR_MATERIAL);
   glEnable(GL_LIGHTING); 
- 
+  //glDisable(GL_SCISSOR_TEST);
+  
   glLightfv(GL_LIGHT0, GL_AMBIENT,  light_ambient);
   glLightfv(GL_LIGHT0, GL_DIFFUSE,  light_diffuse);
   glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular);
